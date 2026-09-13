@@ -1,0 +1,166 @@
+# yamllint disable rule:line-length
+# Allegro training config for the polyethylene DFT dataset (pe_206_dft.xyz).
+# Derived from configs/tutorial.yaml. Every line tagged `# USER:` is a knob the
+# user sets explicitly; the values present are placeholders / sane defaults.
+
+run: [train, test]
+
+cutoff_radius: 5.0                      # USER: r_max (avg neighbors: 24 @4A, 46 @5A, 83 @6A)
+model_type_names: [C, H]
+chemical_species: ${model_type_names}
+
+# dataset file (1002 frames x 206 atoms, C68H138, periodic, energy/forces/stress)
+dataset_path: C:/Users/sumedh/Downloads/pe_206_dft.xyz
+
+data:
+  _target_: nequip.data.datamodule.ASEDataModule
+  seed: 123                             # USER: data split seed
+  split_dataset:
+    file_path: ${dataset_path}
+    train: 0.8                          # USER: split fractions (or integer frame counts)
+    val: 0.1
+    test: 0.1
+  transforms:
+    - _target_: nequip.data.transforms.ChemicalSpeciesToAtomTypeMapper
+      model_type_names: ${model_type_names}
+    - _target_: nequip.data.transforms.NeighborListTransform
+      r_max: ${cutoff_radius}
+  train_dataloader:
+    _target_: torch.utils.data.DataLoader
+    batch_size: 4                       # USER: training batch size (frames per step)
+    shuffle: true
+    num_workers: 0                      # keep 0 on Windows
+  val_dataloader:
+    _target_: torch.utils.data.DataLoader
+    batch_size: 8
+    num_workers: 0
+  test_dataloader: ${data.val_dataloader}
+  stats_manager:
+    _target_: nequip.data.CommonDataStatisticsManager
+    type_names: ${model_type_names}
+    dataloader_kwargs:
+      batch_size: 8
+
+trainer:
+  _target_: lightning.Trainer
+  accelerator: gpu
+  devices: 1
+  max_epochs: 100                       # USER: epochs
+  check_val_every_n_epoch: 1            # must stay 1 for EMALightningModule
+  log_every_n_steps: 10
+  logger:
+    _target_: lightning.pytorch.loggers.TensorBoardLogger
+    save_dir: ${hydra:runtime.output_dir}
+    name: tb
+  callbacks:
+    - _target_: lightning.pytorch.callbacks.ModelCheckpoint
+      dirpath: ${hydra:runtime.output_dir}
+      monitor: val0_epoch/weighted_sum
+      mode: min
+      save_top_k: 1
+      save_last: true
+      filename: best
+    - _target_: lightning.pytorch.callbacks.LearningRateMonitor
+      logging_interval: epoch
+    - _target_: nequip.train.callbacks.LossCoefficientMonitor
+      interval: epoch
+      frequency: 10
+    # USER: TF32 matmuls (faster on RTX 4080, slightly lower precision); enable by uncommenting
+    # - _target_: nequip.train.callbacks.TF32Scheduler
+    #   schedule:
+    #     0: true
+
+# interpolation helpers for the Allegro model
+num_scalar_features: 64                 # USER
+num_tensor_features: 32                 # USER
+l_max: 1                                # USER: 1 fast, 2 more accurate, 3 slow
+num_layers: 2                           # USER: 1-3
+
+training_module:
+  _target_: nequip.train.EMALightningModule
+  ema_decay: 0.999                      # USER
+  loss:
+    _target_: nequip.train.EnergyForceStressLoss   # USER: drop to EnergyForceLoss to ignore stress
+    per_atom_energy: true
+    coeffs:
+      total_energy: 1.0                 # USER: loss weights
+      forces: 1.0
+      stress: 1.0
+  val_metrics:
+    _target_: nequip.train.EnergyForceStressMetrics
+    coeffs:
+      per_atom_energy_mae: 1.0
+      forces_mae: 1.0
+      stress_mae: 1.0
+      total_energy_rmse: null
+      forces_rmse: null
+      stress_rmse: null
+  test_metrics: ${training_module.val_metrics}
+  optimizer:
+    _target_: torch.optim.Adam
+    lr: 0.001                           # USER: Allegro likes ~1e-3
+  lr_scheduler:
+    scheduler:
+      _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+      factor: 0.8                       # USER
+      patience: 10                      # USER
+    monitor: val0_epoch/weighted_sum
+    interval: epoch
+    frequency: 1
+
+  model:
+    _target_: allegro.model.AllegroModel
+
+    # train-time torch.compile: needs triton + MSVC on Windows; keep eager until that is set up
+    compile_mode: eager                 # USER: eager | compile
+
+    seed: 456                           # USER: model init seed
+    model_dtype: float32                # USER: float32 | float64
+    type_names: ${model_type_names}
+    r_max: ${cutoff_radius}
+
+    # === two-body scalar embedding ===
+    radial_chemical_embed:
+      _target_: allegro.nn.TwoBodyBesselScalarEmbed
+      num_bessels: 8                    # USER
+      bessel_trainable: false
+      polynomial_cutoff_p: 6
+    radial_chemical_embed_dim: ${num_scalar_features}
+    scalar_embed_mlp_hidden_layers_depth: 1
+    scalar_embed_mlp_hidden_layers_width: ${num_scalar_features}
+    scalar_embed_mlp_nonlinearity: silu
+
+    # === core hyperparameters ===
+    l_max: ${l_max}
+    num_layers: ${num_layers}
+    num_scalar_features: ${num_scalar_features}
+    num_tensor_features: ${num_tensor_features}
+    allegro_mlp_hidden_layers_depth: 1  # USER
+    allegro_mlp_hidden_layers_width: ${num_scalar_features}   # USER (docs: 2-4x num_scalar_features is a good start)
+    allegro_mlp_nonlinearity: silu
+
+    # === advanced ===
+    parity: true                        # USER: false is faster, often equally good
+    tp_path_channel_coupling: true      # USER
+
+    # === readout ===
+    readout_mlp_hidden_layers_depth: 1
+    readout_mlp_hidden_layers_width: ${num_scalar_features}
+    readout_mlp_nonlinearity: silu
+
+    # === normalization / per-type scale-shift ===
+    avg_num_neighbors: ${training_data_stats:per_type_num_neighbors_mean}
+    # USER: isolated-atom DFT energies (eV) are preferred over the dataset mean, e.g.
+    # per_type_energy_shifts: {C: -1.2345, H: -0.1234}
+    per_type_energy_shifts: ${training_data_stats:per_atom_energy_mean}
+    per_type_energy_scales: ${training_data_stats:forces_rms}
+    per_type_energy_scales_trainable: false
+    per_type_energy_shifts_trainable: false
+
+    # ZBL short-range repulsion; energies in eV / distances in Angstrom -> "metal"
+    # USER: remove this block to train without ZBL
+    pair_potential:
+      _target_: nequip.nn.pair_potential.ZBL
+      units: metal
+      chemical_species: ${chemical_species}
+
