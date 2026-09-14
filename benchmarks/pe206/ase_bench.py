@@ -13,6 +13,11 @@ import time
 import ase.io
 import numpy as np
 import torch
+
+try:  # models compiled with enable_CuEquivarianceContracter need the ops registered
+    import cuequivariance_torch  # noqa: F401
+except ImportError:
+    pass
 from ase import units
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet

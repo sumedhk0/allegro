@@ -30,9 +30,10 @@ compile () {
 }
 
 compile base
-# TF32 changes forces by ~5e-3 eV/A on this model, above nequip's default 2e-3
-# check tolerance; relax the check for the benchmark variant only.
-NEQUIP_TF32_MODEL_TOL=0.01 compile tf32 --tf32
+# TF32 changes forces by ~5e-3 eV/A and the (extensive, 206-atom) virial by
+# ~1.4e-2 eV on this model, above nequip's default 2e-3 check tolerance; relax
+# the check for the benchmark variant only.
+NEQUIP_TF32_MODEL_TOL=0.05 compile tf32 --tf32
 compile cueq   --modifiers enable_CuEquivarianceContracter
 compile triton --modifiers enable_TritonContracter
 # ASE-target variant for the Python reference measurement

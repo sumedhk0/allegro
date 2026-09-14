@@ -14,6 +14,9 @@ source ~/.venvs/allegro/bin/activate
 TORCH_CMAKE=$(python -c 'import torch; print(torch.utils.cmake_prefix_path)')
 echo "torch cmake prefix: $TORCH_CMAKE"
 
+# pair_nequip_allegro's compute header predates LAMMPS develop's new style registry
+python3 "$(dirname "$0")/fix_compute_header.py" ~/lammps
+
 cd ~/lammps
 rm -rf build && mkdir build && cd build
 cmake ../cmake -G Ninja \
