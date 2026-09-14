@@ -25,6 +25,12 @@ data:
       model_type_names: ${model_type_names}
     - _target_: nequip.data.transforms.NeighborListTransform
       r_max: ${cutoff_radius}
+    # The file's stress labels use the opposite sign convention from nequip/ASE
+    # (positive = tensile). Evidence: a model trained without this flip (run1)
+    # predicted stresses anti-correlated with the labels (r = -0.81 xx, -0.96 zz,
+    # -0.96 xz on 21 frames), and negating its predictions halved the stress MAE.
+    # Flipping on the fly here keeps the .xyz untouched.
+    - _target_: nequip.data.transforms.StressSignFlipTransform
   train_dataloader:
     _target_: torch.utils.data.DataLoader
     batch_size: 4                       # USER: training batch size (frames per step)
