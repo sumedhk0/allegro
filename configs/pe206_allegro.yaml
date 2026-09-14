@@ -1,11 +1,11 @@
 # yamllint disable rule:line-length
 # Allegro training config for the polyethylene DFT dataset (pe_206_dft.xyz).
-# Derived from configs/tutorial.yaml. Every line tagged `# USER:` is a knob the
-# user sets explicitly; the values present are placeholders / sane defaults.
+# Derived from configs/tutorial.yaml. Lines tagged `# USER:` are the knobs the
+# user chose explicitly (2026-09-13); everything else is the tutorial default.
 
 run: [train, test]
 
-cutoff_radius: 5.0                      # USER: r_max (avg neighbors: 24 @4A, 46 @5A, 83 @6A)
+cutoff_radius: 4.5                      # USER: r_max (avg neighbors: 24 @4A, 46 @5A, 83 @6A)
 model_type_names: [C, H]
 chemical_species: ${model_type_names}
 
@@ -74,7 +74,7 @@ trainer:
 num_scalar_features: 64                 # USER
 num_tensor_features: 32                 # USER
 l_max: 1                                # USER: 1 fast, 2 more accurate, 3 slow
-num_layers: 2                           # USER: 1-3
+num_layers: 1                           # USER: 1-3
 
 training_module:
   _target_: nequip.train.EMALightningModule
@@ -140,7 +140,7 @@ training_module:
     allegro_mlp_nonlinearity: silu
 
     # === advanced ===
-    parity: true                        # USER: false is faster, often equally good
+    parity: false                       # USER: false is faster, often equally good
     tp_path_channel_coupling: true      # USER
 
     # === readout ===
@@ -157,10 +157,11 @@ training_module:
     per_type_energy_scales_trainable: false
     per_type_energy_shifts_trainable: false
 
-    # ZBL short-range repulsion; energies in eV / distances in Angstrom -> "metal"
-    # USER: remove this block to train without ZBL
-    pair_potential:
-      _target_: nequip.nn.pair_potential.ZBL
-      units: metal
-      chemical_species: ${chemical_species}
+    # USER: no ZBL pair potential. nequip's ZBL has no short-range switch, so at
+    # polyethylene bond lengths it adds ~3 eV per C-H / C-C bond (~600 eV per
+    # frame) that the network would have to learn to cancel. Re-add if needed:
+    # pair_potential:
+    #   _target_: nequip.nn.pair_potential.ZBL
+    #   units: metal
+    #   chemical_species: ${chemical_species}
 
