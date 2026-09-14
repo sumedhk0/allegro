@@ -25,14 +25,17 @@ NP=${NP:-1}
     $KKARGS $EXTRA
 STATUS=$?
 
-NATOMS=$(grep -m1 -oE "[0-9]+ atoms" "$LOG" | awk '{print $1}')
-# second Loop time line = timed run
+# last Loop time line = timed run; it also carries the post-replicate atom count
 LOOP=$(grep "Loop time" "$LOG" | tail -1)
 SECS=$(echo "$LOOP" | awk '{print $4}')
 STEPS=$(echo "$LOOP" | awk '{print $9}')
+NATOMS=$(echo "$LOOP" | awk '{print $12}')
 NSDAY=$(grep -A2 "Loop time" "$LOG" | tail -3 | grep -m1 "Performance:" | awk '{print $2}')
 MSSTEP=$(awk -v s="$SECS" -v n="$STEPS" 'BEGIN{ if (n>0) printf "%.3f", 1000*s/n; else print "nan"}')
 USPERATOMSTEP=$(awk -v s="$SECS" -v n="$STEPS" -v a="$NATOMS" 'BEGIN{ if (n>0 && a>0) printf "%.3f", 1e6*s/(n*a); else print "nan"}')
-WALL=$(awk '{print $1}' "$LOG.time"); RSS=$(awk '{print $2}' "$LOG.time")
-[ -f "$CSV" ] || echo "label,model,nrep,natoms,kokkos,np,nsteps,skin,nevery,status,ms_per_step,us_per_atom_step,ns_per_day,wall_s,max_rss_kb" > "$CSV"
-echo "$LABEL,$(basename "$MODEL"),$NREP,$NATOMS,$KK,$NP,$NSTEPS,$SKIN,$NEVERY,$STATUS,$MSSTEP,$USPERATOMSTEP,$NSDAY,$WALL,$RSS" | tee -a "$CSV"
+# /usr/bin/time prepends "Command exited with non-zero status N" on failure; take the last line
+WALL=$(tail -1 "$LOG.time" | awk '{print $1}'); RSS=$(tail -1 "$LOG.time" | awk '{print $2}')
+# NVE energy drift over the timed run (eV), from the thermo table of the last run block
+DRIFT=$(awk '/^ *Step /{hdr=1; c=0; next} hdr && /^ *[0-9]+ /{c++; e[c]=$5} /^Loop time/{hdr=0; if (c>1) d=e[c]-e[1]} END{if (d!="") printf "%.5f", d; else print "nan"}' "$LOG")
+[ -f "$CSV" ] || echo "label,model,nrep,natoms,kokkos,np,nsteps,skin,nevery,status,ms_per_step,us_per_atom_step,ns_per_day,etot_drift_eV,wall_s,max_rss_kb" > "$CSV"
+echo "$LABEL,$(basename "$MODEL"),$NREP,$NATOMS,$KK,$NP,$NSTEPS,$SKIN,$NEVERY,$STATUS,$MSSTEP,$USPERATOMSTEP,$NSDAY,$DRIFT,$WALL,$RSS" | tee -a "$CSV"
