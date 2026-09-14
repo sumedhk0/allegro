@@ -5,6 +5,7 @@ Times single-frame force+energy calls through NequIPCalculator on a compiled
 VelocityVerlet MD to get an ASE-side ms/step. Complements the LAMMPS numbers.
 
 Usage: python ase_bench.py <model.nequip.pt2> [ncalls] [nrep ...]
+Expects pe206_frame500.xyz in the working directory (create it with make_inputs.py).
 """
 
 import sys

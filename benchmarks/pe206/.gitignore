@@ -1,0 +1,3 @@
+# structure files are derived from the private DFT dataset; regenerate with make_inputs.py
+pe206.data
+pe206_frame*.xyz

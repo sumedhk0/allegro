@@ -14,8 +14,11 @@ export LMP=$HOME/lammps/build/lmp
 MODELS=$HOME/pe206/models
 SRC="/mnt/c/Users/sumedh/OneDrive - Georgia Institute of Technology/Python/allegro/benchmarks/pe206"
 mkdir -p "$BENCH_DIR"
-cp "$SRC/in.pe206" "$SRC/pe206.data" "$SRC/run_bench.sh" "$BENCH_DIR/"
+cp "$SRC/in.pe206" "$SRC/run_bench.sh" "$SRC/ase_bench.py" "$BENCH_DIR/"
 chmod +x "$BENCH_DIR/run_bench.sh"
+# structure files are generated from the private dataset, never committed
+DATASET=${DATASET:-$HOME/pe206/pe_206_dft.xyz}
+[ -f "$BENCH_DIR/pe206.data" ] || python "$SRC/make_inputs.py" "$DATASET" --out "$BENCH_DIR"
 RB="$BENCH_DIR/run_bench.sh"
 
 STEPS=${STEPS:-200}

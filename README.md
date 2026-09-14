@@ -10,6 +10,12 @@
 
 # Allegro
 
+> **This fork** adds a from-scratch Allegro training setup for a polyethylene DFT
+> dataset and an inference-speed study (LAMMPS + Kokkos, compile variants, ASE) on an
+> RTX 4080 laptop. Start at [`benchmarks/pe206/RESULTS.md`](benchmarks/pe206/RESULTS.md);
+> the training config is [`configs/pe206_allegro.yaml`](configs/pe206_allegro.yaml).
+> Everything below is the upstream README.
+
 This package implements the [Allegro E(3)-equivariant machine learning interatomic potential](https://www.nature.com/articles/s41467-023-36329-y).
 
 In particular, `allegro` implements the Allegro model as an **extension package** for the [NequIP framework](https://github.com/mir-group/nequip).
