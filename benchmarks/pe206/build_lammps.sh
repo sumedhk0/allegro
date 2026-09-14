@@ -3,7 +3,12 @@
 # for the RTX 4080 (Ada, sm_89). Run inside WSL Ubuntu after setup_venv.sh and
 # setup_lammps_src.sh have finished.
 set -euxo pipefail
-export PATH=/usr/local/cuda/bin:$HOME/.local/bin:$PATH
+# CUDA 13.0's headers clash with Ubuntu 26.04's glibc (rsqrt noexcept), so a newer
+# toolkit is used for nvcc; torch's own CUDA 13.0 runtime is a different minor of
+# the same major and coexists.
+CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}
+export PATH=$CUDA_HOME/bin:$HOME/.local/bin:$PATH
+export LIBRARY_PATH=/usr/lib/wsl/lib:${LIBRARY_PATH:-}
 source ~/.venvs/allegro/bin/activate
 
 TORCH_CMAKE=$(python -c 'import torch; print(torch.utils.cmake_prefix_path)')
@@ -16,7 +21,8 @@ cmake ../cmake -G Ninja \
   -DCMAKE_PREFIX_PATH="$TORCH_CMAKE" \
   -DNEQUIP_AOT_COMPILE=ON \
   -DMKL_INCLUDE_DIR=/tmp \
-  -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda \
+  -DCUDA_TOOLKIT_ROOT_DIR=$CUDA_HOME \
+  -DCMAKE_CUDA_COMPILER=$CUDA_HOME/bin/nvcc \
   -DBUILD_MPI=ON \
   -DBUILD_OMP=OFF \
   -DPKG_KOKKOS=ON \
