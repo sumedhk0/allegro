@@ -19,9 +19,11 @@ fi
 
 cd "$BENCH"
 NP=${NP:-1}
+ENSEMBLE=${ENSEMBLE:-nve}; TEMP=${TEMP:-300.0}; PRESS=${PRESS:-1.0}
 /usr/bin/time -f "%e %M" -o "$LOG.time" \
   mpirun -np "$NP" "$LMP" -in in.pe206 -log "$LOG" -screen none \
     -var model "$MODEL" -var nrep "$NREP" -var nsteps "$NSTEPS" -var skin "$SKIN" -var nevery "$NEVERY" \
+    -var ensemble "$ENSEMBLE" -var temp "$TEMP" -var press "$PRESS" \
     $KKARGS $EXTRA
 STATUS=$?
 
@@ -37,5 +39,5 @@ USPERATOMSTEP=$(awk -v s="$SECS" -v n="$STEPS" -v a="$NATOMS" 'BEGIN{ if (n>0 &&
 WALL=$(tail -1 "$LOG.time" | awk '{print $1}'); RSS=$(tail -1 "$LOG.time" | awk '{print $2}')
 # NVE energy drift over the timed run (eV), from the thermo table of the last run block
 DRIFT=$(awk '/^ *Step /{hdr=1; c=0; next} hdr && /^ *[0-9]+ /{c++; e[c]=$5} /^Loop time/{hdr=0; if (c>1) d=e[c]-e[1]} END{if (d!="") printf "%.5f", d; else print "nan"}' "$LOG")
-[ -f "$CSV" ] || echo "label,model,nrep,natoms,kokkos,np,nsteps,skin,nevery,status,ms_per_step,us_per_atom_step,ns_per_day,etot_drift_eV,wall_s,max_rss_kb" > "$CSV"
-echo "$LABEL,$(basename "$MODEL"),$NREP,$NATOMS,$KK,$NP,$NSTEPS,$SKIN,$NEVERY,$STATUS,$MSSTEP,$USPERATOMSTEP,$NSDAY,$DRIFT,$WALL,$RSS" | tee -a "$CSV"
+[ -f "$CSV" ] || echo "label,model,nrep,natoms,kokkos,np,ensemble,nsteps,skin,nevery,status,ms_per_step,us_per_atom_step,ns_per_day,etot_drift_eV,wall_s,max_rss_kb" > "$CSV"
+echo "$LABEL,$(basename "$MODEL"),$NREP,$NATOMS,$KK,$NP,$ENSEMBLE,$NSTEPS,$SKIN,$NEVERY,$STATUS,$MSSTEP,$USPERATOMSTEP,$NSDAY,$DRIFT,$WALL,$RSS" | tee -a "$CSV"

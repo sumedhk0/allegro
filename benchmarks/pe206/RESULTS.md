@@ -104,7 +104,29 @@ What this means:
 | neighbor list check every 10 steps instead of every step | 23.9 | no change |
 | 2 MPI ranks sharing the GPU | fails | plugin requires one GPU per rank |
 
-### 4. Python (ASE) path, for comparison
+### 4. Ensembles: NVE vs NVT vs NPT (base model, Kokkos, 3 interleaved repeats, 2026-09-20)
+
+| cell | NVE ms/step | NVT (Nose-Hoover) | NPT (Nose-Hoover, isotropic, 1 bar) |
+|---|---|---|---|
+| 206 atoms | 3.0 – 3.6 | 3.0 – 3.6 | 3.4 – 3.8 (+2 to +11 %) |
+| 5,562 atoms | 23.9 – 25.2 | 24.0 – 24.9 | 24.5 – 24.6 (+2 %) |
+
+Thermostat and barostat are essentially free. The compiled `pair_allegro` model returns
+the virial on every step regardless of ensemble, so NPT adds only LAMMPS-side box
+updates and slightly more frequent neighbor-list rebuilds. Use `ENSEMBLE=npt` with
+`run_bench.sh`, or `run_ensembles.sh` for the full comparison; raw rows in
+`results/results_ensembles.csv`.
+
+A note on noise: this is a laptop GPU. The small-cell numbers above are 30 to 50 %
+slower than the 2.2 to 2.4 ms measured a week earlier, and the 5,562-atom numbers are
+unchanged. The difference is GPU clock state (nvidia-smi reported long cumulative
+software thermal-slowdown and power-cap periods): a 206-atom step is launch-latency
+bound and suffers directly from lower clocks, while a saturated GPU does not. Compare
+variants only within one interleaved run, never across sessions, and discard the first
+round if the GPU started cold. A first attempt at this table, taken while the GPU was
+throttling mid-run, showed NPT at +86 %; it did not survive a clean rerun.
+
+### 5. Python (ASE) path, for comparison
 
 Same compiled model loaded through `NequIPCalculator`, one force call per measurement.
 
@@ -130,6 +152,22 @@ the CPU is busy (8.9 ms instead of 4.2 ms for 206 atoms while a compile ran alon
 4. To go faster, change the model, not the runtime: a smaller cutoff (4.0 Å is ~24
    neighbors instead of 36) and narrower MLPs are the levers; each needs retraining.
 5. A second GPU would be the only other lever; the plugin needs one GPU per MPI rank.
+
+## Running your own MD in one command
+
+From Windows (PowerShell or cmd), in this directory:
+
+```
+.\lammps_md.cmd --structure C:\Users\sumedh\Downloads\pe_206_dft.xyz --frame 500 --ensemble npt --temp 300 --press 1.0 --steps 20000 --out C:\Users\sumedh\md_run1
+```
+
+It converts the structure, writes a LAMMPS input, runs `pair_allegro` under Kokkos in
+WSL, and leaves `traj.lammpstrj` (open in OVITO), `log.lammps`, and the generated
+`in.md` in the output directory. Options: `--ensemble nve|nvt|npt`, `--nrep 2` for a
+2×2×2 box, `--dt`, `--dump-every`, `--pcouple iso|aniso|tri`, `--model` for a different
+compiled model, `--no-kokkos`. Inside WSL, call `lammps_md.sh` directly with the same
+options. For a 206-atom cell, NPT pressure swings by thousands of bar; use a larger box
+(`--nrep 2` or more) for a meaningful barostat.
 
 ## Reproducing
 
