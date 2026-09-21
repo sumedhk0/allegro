@@ -153,37 +153,33 @@ the CPU is busy (8.9 ms instead of 4.2 ms for 206 atoms while a compile ran alon
    neighbors instead of 36) and narrower MLPs are the levers; each needs retraining.
 5. A second GPU would be the only other lever; the plugin needs one GPU per MPI rank.
 
-## Running your own MD in one command
+## Running it yourself: one Python file
 
-From Windows (PowerShell or cmd), in this directory:
+Everything LAMMPS-related lives in `examples/lammps_md.py` (build, compile, run, bench).
+Inside WSL Ubuntu, with the venv active:
 
 ```
-.\lammps_md.cmd --structure C:\Users\sumedh\Downloads\pe_206_dft.xyz --frame 500 --ensemble npt --temp 300 --press 1.0 --steps 20000 --out C:\Users\sumedh\md_run1
+source ~/.venvs/allegro/bin/activate
+python examples/lammps_md.py run   --structure ~/pe206/pe_206_dft.xyz --frame 500 --ensemble npt --nrep 2 --steps 20000
+python examples/lammps_md.py bench --structure ~/pe206/pe_206_dft.xyz --frame 500 --ensembles nve nvt npt --nrep 1 3 --repeats 3
+python examples/lammps_md.py compile ~/pe206/run2_best.ckpt --variant base     # or tf32 / triton / cueq
+python examples/lammps_md.py build                                             # one-time LAMMPS build
 ```
 
-It converts the structure, writes a LAMMPS input, runs `pair_allegro` under Kokkos in
-WSL, and leaves `traj.lammpstrj` (open in OVITO), `log.lammps`, and the generated
-`in.md` in the output directory. Options: `--ensemble nve|nvt|npt`, `--nrep 2` for a
-2×2×2 box, `--dt`, `--dump-every`, `--pcouple iso|aniso|tri`, `--model` for a different
-compiled model, `--no-kokkos`. Inside WSL, call `lammps_md.sh` directly with the same
-options. For a 206-atom cell, NPT pressure swings by thousands of bar; use a larger box
-(`--nrep 2` or more) for a meaningful barostat.
+`run` writes `traj.lammpstrj` (open in OVITO), `log.lammps`, `in.md` and `structure.data`
+into the output directory and prints ms/step and ns/day. `bench` interleaves every
+model × cell size × ensemble × Kokkos setting for `--repeats` rounds, appends one CSV row
+per case (ms/step, µs/atom-step, ns/day, energy drift) and prints mean ± sd. Windows
+paths are accepted. From Windows, `benchmarks\pe206\lammps_md.cmd run ...` forwards
+into WSL. For a 206-atom cell NPT pressure swings by thousands of bar; use `--nrep 2`
+or more for a meaningful barostat.
 
-## Reproducing
-
-All scripts live in this directory and were run inside WSL2 Ubuntu.
-
-1. `build_lammps.sh` — builds LAMMPS develop with `pair_nequip_allegro`, AOTInductor
-   loading and Kokkos CUDA (sm_89). It first runs `fix_compute_header.py`, which patches
-   a plugin header that no longer compiles against current LAMMPS develop.
-2. `compile_models.sh` — compiles the checkpoint into the base, TF32, cuEquivariance and
-   Triton variants with `nequip-compile`.
-3. `make_inputs.py <dataset.xyz>` — writes the LAMMPS data file and an extxyz frame from
-   the dataset. These files are derived from private DFT data and are not committed.
-4. `run_matrix.sh` — the full LAMMPS matrix; `run_bench.sh` runs one case and appends a
-   CSV row (ms/step, µs/atom-step, ns/day, energy drift).
-5. `ase_bench.py` — the Python/ASE reference timings.
+The numbers in this document were produced by an earlier set of shell scripts with the
+same LAMMPS input (kept in git history up to commit 9b14db7); `bench` reproduces them.
+The ASE reference timings come from `ase_bench.py` in this directory, which expects a
+`pe206_frame500.xyz` next to it (any single frame of the dataset written as extxyz).
 
 Raw outputs: `results/results.csv` (matrix, single runs; its `natoms` column reflects the
 pre-replicate count for that pass), `results/results_repeats.csv` (3× repeats with
-drift), `results/ase_*.csv`, and per-case LAMMPS logs in `results/logs/`.
+drift), `results/results_ensembles.csv`, `results/ase_*.csv`, and per-case LAMMPS logs in
+`results/logs/`.
