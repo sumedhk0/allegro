@@ -148,3 +148,6 @@ dmypy.json
 cython_debug/
 
 .vscode/
+# local agent tooling state, never commit
+.claude-flow/
+.ua/
